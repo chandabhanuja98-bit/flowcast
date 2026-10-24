@@ -6,7 +6,6 @@ RAW_DATA_DIRECTORY = PROJECT_ROOT/"data"/"raw"
 
 
 
-
 def load_csv(name : str) -> pd.DataFrame :
     path = RAW_DATA_DIRECTORY/name
     if not path.exists() :
@@ -34,6 +33,70 @@ def inspect_dataframe(name : str, data : pd.DataFrame) -> None :
     print("\n Print first 5 rows : ")
     print(data.head())
 
+
+def validate_required_columns(data: pd.DataFrame,required_columns : list[str],dataset_name : str) -> None:
+    missing_columns = [
+        column for column in required_columns
+        if column not in data.columns
+    ]
+
+    if missing_columns:
+        raise ValueError(
+            f"Missing required columns in {dataset_name}"
+            f"{missing_columns}"
+        )
+    print(f"{dataset_name} : required columns are validated")
+
+def validate_dataset_schema(data : pd.DataFrame, dataset_name : str) -> None :
+    required_columns_by_file = {
+        "traffic_sensor_log.csv": [
+            "road_id",
+            "road_name",
+            "latitude",
+            "longitude",
+            "weather_station_id",
+            "date",
+            "time",
+            "traffic_volume",
+            "vehicle_count",
+            "vehicle_type_dist",
+            "avg_speed",
+            "occupancy",
+            "congestion_level",
+            "travel_time",
+            "accident_count",
+            "signal_timing",
+            "road_capacity",
+        ],
+
+        "weather_observations.csv": [
+            "station_id",
+            "date",
+            "time",
+            "weather_condition",
+            "temperature",
+            "rainfall",
+            "visibility",
+        ],
+
+        "calendar_events.csv": [
+            "date",
+            "public_holiday",
+            "holiday_name",
+            "event_flag",
+            "event_name",
+            "roadwork_flag",
+        ],
+    }
+    if dataset_name not in required_columns_by_file:
+        raise ValueError(
+            f"No schema definition found for {dataset_name}"
+        )
+    required_columns = required_columns_by_file[dataset_name]
+
+    validate_required_columns(data,required_columns,dataset_name)
+
+
 def main() -> None :
     csv_files = sorted(RAW_DATA_DIRECTORY.glob("*.csv"))
     if not csv_files :
@@ -41,19 +104,13 @@ def main() -> None :
     for csv in csv_files :
         data = load_csv(csv.name)
         inspect_dataframe(csv.name,data)
+        validate_dataset_schema(data,csv.name)
 
-
-
-
-
-
-
-
-
-
+    
 
 if __name__ == "__main__":
     main()
+    
 
 
 
