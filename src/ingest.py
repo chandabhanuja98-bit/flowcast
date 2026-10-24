@@ -96,6 +96,21 @@ def validate_dataset_schema(data : pd.DataFrame, dataset_name : str) -> None :
 
     validate_required_columns(data,required_columns,dataset_name)
 
+def create_time_stamp(data : pd.DataFrame, dataset_name : str) -> pd.DataFrame :
+    data = data.copy()
+    date_time_values = (
+        data['date'].astype('string').str.strip() + " " + data['time'].astype('string').str.strip()
+    )
+    data["timestamp"] = pd.to_datetime(
+        date_time_values, format="mixed", errors="coerce"
+    )
+    Invalid_count = data["timestamp"].isna().sum()
+    print(f"Timestamp creation : {dataset_name} ")
+    print(f"Invalid time stamps : {Invalid_count}")
+    return data
+
+    
+
 
 def main() -> None :
     csv_files = sorted(RAW_DATA_DIRECTORY.glob("*.csv"))
@@ -103,8 +118,11 @@ def main() -> None :
         raise FileNotFoundError(f"No CSV file found in {RAW_DATA_DIRECTORY}")
     for csv in csv_files :
         data = load_csv(csv.name)
+        if csv.name in ["traffic_sensor_log.csv","weather_observations.csv"] :
+            data = create_time_stamp(data,csv.name)
         inspect_dataframe(csv.name,data)
         validate_dataset_schema(data,csv.name)
+
 
     
 
