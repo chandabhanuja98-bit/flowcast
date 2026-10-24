@@ -109,7 +109,142 @@ def create_time_stamp(data : pd.DataFrame, dataset_name : str) -> pd.DataFrame :
     print(f"Invalid time stamps : {Invalid_count}")
     return data
 
+def inspect_duplicate_keys(data: pd.DataFrame, dataset_name : str) -> None :
+    required_columns = ["road_id", "timestamp"]
+    missing_columns = [
+        column for column in required_columns 
+        if column not in data.columns 
+    ] 
+    if missing_columns :
+        print(
+            f"Skipping duplicate-key inspection for "
+            f"{dataset_name}: missing columns "
+            f"{missing_columns}"
+        )
+        return
+    duplicate_mask = data.duplicated(
+        subset = ["road_id", "timestamp"], keep=False
+    )
+    duplicate_rows = data.loc[duplicate_mask]
+    print(f"\nDuplicate-key analysis: {dataset_name}")
+    print(
+        "Rows involved in duplicate road/timestamp keys:",
+        len(duplicate_rows),
+    )
+
+    print(
+        "Number of duplicate road/timestamp groups:",
+        duplicate_rows.groupby(
+            ["road_id", "timestamp"]
+        ).ngroups,
+    )
+    if not duplicate_rows.empty:
+        print("\nExample duplicate records:")
+        print(
+            duplicate_rows.sort_values(
+                ["road_id", "timestamp"]
+            ).head(10)
+        )
+
+def inspect_numeric_ranges( df: pd.DataFrame, dataset_name: str)-> None:
     
+    print(f"\nNumeric range analysis: {dataset_name}")
+
+    # Columns that should not contain negative values.
+    non_negative_columns = [
+        "traffic_volume",
+        "vehicle_count",
+        "avg_speed",
+        "occupancy",
+        "travel_time",
+        "accident_count",
+        "road_capacity",
+        "signal_timing",
+    ]
+
+    for column in non_negative_columns:
+        if column not in df.columns :
+            continue
+
+        values = pd.to_numeric(
+            df[column],
+            errors="coerce",
+        )
+
+        negative_count = (values < 0).sum()
+
+        print(
+            f"{column}: negative values = "
+            f"{negative_count}"
+        )
+
+    # Check the known speed threshold from the PRD.
+    if "avg_speed" in df.columns:
+        speed = pd.to_numeric(
+            df["avg_speed"],
+            errors="coerce",
+        )
+
+        high_speed_count = (speed > 200).sum()
+
+        print(
+            "avg_speed: values above 200 = "
+            f"{high_speed_count}"
+        )
+
+    # Check the known occupancy threshold from the PRD.
+    if "occupancy" in df.columns:
+        occupancy = pd.to_numeric(
+            df["occupancy"],
+            errors="coerce",
+        )
+
+        high_occupancy_count = (occupancy > 100).sum()
+
+        print(
+            "occupancy: values above 100 = "
+            f"{high_occupancy_count}"
+        )
+
+def inspect_missing_values(  df: pd.DataFrame,dataset_name: str)-> None:
+   
+    print(f"\nMissing-value analysis: {dataset_name}")
+
+    missing_count = df.isnull().sum()
+    missing_percentage = (missing_count / len(df)) * 100
+
+    missing_report = pd.DataFrame({
+        "missing_count": missing_count,
+        "missing_percentage": missing_percentage.round(2),
+    })
+
+    missing_report = missing_report[
+        missing_report["missing_count"] > 0
+    ]
+
+    if missing_report.empty:
+        print("No missing values found.")
+    else:
+        print(missing_report.sort_values(
+            by="missing_count",
+            ascending=False,
+        ))
+
+def remove_exact_duplicates(df: pd.DataFrame, dataset_name: str,) -> pd.DataFrame:
+   
+    original_count = len(df)
+
+    df = df.drop_duplicates().copy()
+
+    removed_count = original_count - len(df)
+
+    print(f"\nExact duplicate removal: {dataset_name}")
+    print(f"Rows before removal: {original_count}")
+    print(f"Exact duplicate rows removed: {removed_count}")
+    print(f"Rows after removal: {len(df)}")
+
+    return df
+
 
 
 def main() -> None :
@@ -118,11 +253,15 @@ def main() -> None :
         raise FileNotFoundError(f"No CSV file found in {RAW_DATA_DIRECTORY}")
     for csv in csv_files :
         data = load_csv(csv.name)
+        validate_dataset_schema(data,csv.name)
+        inspect_missing_values(data,csv.name)
+        data = remove_exact_duplicates(data,csv.name)
         if csv.name in ["traffic_sensor_log.csv","weather_observations.csv"] :
             data = create_time_stamp(data,csv.name)
+        if csv.name == "traffic_sensor_log.csv" :
+            inspect_duplicate_keys(data,csv.name)
+            inspect_numeric_ranges(data,csv.name)
         inspect_dataframe(csv.name,data)
-        validate_dataset_schema(data,csv.name)
-
 
     
 
