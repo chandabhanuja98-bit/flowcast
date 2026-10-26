@@ -1,5 +1,6 @@
 import pandas as pd
 from pathlib import Path
+from clean import remove_exact_duplicates,standardize_weather_conditions, remove_duplicate_traffic_records, handle_invalid_numeric_values, merge_datasets
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent  
 RAW_DATA_DIRECTORY = PROJECT_ROOT/"data"/"raw"
@@ -230,31 +231,6 @@ def inspect_missing_values(  df: pd.DataFrame,dataset_name: str)-> None:
             ascending=False,
         ))
 
-def remove_exact_duplicates(df: pd.DataFrame, dataset_name: str,) -> pd.DataFrame:
-   
-    original_count = len(df)
-
-    df = df.drop_duplicates().copy()
-
-    removed_count = original_count - len(df)
-
-    print(f"\nExact duplicate removal: {dataset_name}")
-    print(f"Rows before removal: {original_count}")
-    print(f"Exact duplicate rows removed: {removed_count}")
-    print(f"Rows after removal: {len(df)}")
-
-    return df
-
-def standardize_weather_conditions(data : pd.DataFrame) -> pd.DataFrame :
-    data = data.copy()
-    print("-------------------------------------Weather condition before standardization --------------------------------")
-    print(data["weather_condition"].value_counts(dropna=False))
-    data["weather_condition"] = (data["weather_condition"].str.strip().str.lower())
-    print("-------------------------------------Weather condition After standardization --------------------------------")
-    print(data["weather_condition"].value_counts(dropna=False))
-    return data
-
-
 
 
 
@@ -272,12 +248,14 @@ def main() -> None :
         if csv.name == "traffic_sensor_log.csv" :
             inspect_duplicate_keys(data,csv.name)
             inspect_numeric_ranges(data,csv.name)
-
+            data = remove_duplicate_traffic_records(data)
         if csv.name ==  "weather_observations.csv" : 
-            data = standardize_weather_conditions(data)
-            
+            data = standardize_weather_conditions(data)      
+        data = handle_invalid_numeric_values(data,csv.name)
+        merged_data = merge_datasets(data)
         inspect_dataframe(csv.name,data)
 
+        
     
 
 if __name__ == "__main__":
