@@ -245,6 +245,17 @@ def remove_exact_duplicates(df: pd.DataFrame, dataset_name: str,) -> pd.DataFram
 
     return df
 
+def standardize_weather_conditions(data : pd.DataFrame) -> pd.DataFrame :
+    data = data.copy()
+    print("-------------------------------------Weather condition before standardization --------------------------------")
+    print(data["weather_condition"].value_counts(dropna=False))
+    data["weather_condition"] = (data["weather_condition"].str.strip().str.lower())
+    print("-------------------------------------Weather condition After standardization --------------------------------")
+    print(data["weather_condition"].value_counts(dropna=False))
+    return data
+
+
+
 
 
 def main() -> None :
@@ -261,6 +272,10 @@ def main() -> None :
         if csv.name == "traffic_sensor_log.csv" :
             inspect_duplicate_keys(data,csv.name)
             inspect_numeric_ranges(data,csv.name)
+
+        if csv.name ==  "weather_observations.csv" : 
+            data = standardize_weather_conditions(data)
+            
         inspect_dataframe(csv.name,data)
 
     
