@@ -6,6 +6,7 @@ from ingest import (
     CALENDAR_FILE,
     PROJECT_ROOT,
     TRAFFIC_FILE,
+    VALUE_LIMITS,
     WEATHER_FILE,
     inspect_dataframe,
     inspect_duplicate_keys,
@@ -17,6 +18,9 @@ from ingest import (
 )
 
 INTERIM_DIRECTORY = PROJECT_ROOT / "data" / "interim"
+REPORT_FILE = PROJECT_ROOT / "reports" / "data_quality.md"
+
+quality_report = {}
 
 
 def remove_exact_duplicates(df: pd.DataFrame, dataset_name: str) -> pd.DataFrame:
@@ -29,18 +33,23 @@ def remove_exact_duplicates(df: pd.DataFrame, dataset_name: str) -> pd.DataFrame
     print(f"Rows before removal: {original_count}")
     print(f"Exact duplicate rows removed: {removed_count}")
     print(f"Rows after removal: {len(df)}")
+    quality_report[f"{dataset_name}: exact duplicate rows removed"] = removed_count
     return df
 
 
 def standardize_weather_conditions(data: pd.DataFrame) -> pd.DataFrame:
     """Clean the weather condition labels."""
     data = data.copy()
+    labels_before = data["weather_condition"].nunique()
     print("Weather condition before standardization :")
     print(data["weather_condition"].value_counts(dropna=False))
     data["weather_condition"] = data["weather_condition"].str.strip().str.lower()
     data["weather_condition"] = data["weather_condition"].replace({"rainy": "rain", "foggy": "fog"})
     print("Weather condition after standardization :")
     print(data["weather_condition"].value_counts(dropna=False))
+    quality_report["Weather: different condition labels before / after"] = (
+        f"{labels_before} / {data['weather_condition'].nunique()}"
+    )
     return data
 
 
@@ -60,6 +69,7 @@ def remove_duplicate_traffic_records(df: pd.DataFrame) -> pd.DataFrame:
     print(f"Rows before: {initial_rows}")
     print(f"Duplicate records removed: {initial_rows - len(df)}")
     print(f"Rows after: {len(df)}")
+    quality_report["Traffic: duplicate road/timestamp rows removed"] = initial_rows - len(df)
     return df
 
 
@@ -76,6 +86,7 @@ def remove_duplicate_keys(df: pd.DataFrame, key_columns: list[str], dataset_name
         .reset_index(drop=True)
     )
     print(f"\n[{dataset_name}] Duplicate keys {key_columns} removed: {initial_rows - len(df)}")
+    quality_report[f"{dataset_name}: duplicate key rows removed"] = initial_rows - len(df)
     return df
 
 
@@ -113,6 +124,47 @@ def handle_invalid_numeric_values(df: pd.DataFrame, dataset_name: str) -> pd.Dat
 
     print(f"\n[{dataset_name}] Invalid numeric values set to NaN:")
     print(invalid_counts)
+    quality_report[f"{dataset_name}: impossible values set to NaN"] = sum(invalid_counts.values())
+    return df
+
+
+def add_missing_windows(df: pd.DataFrame, dataset_name: str) -> pd.DataFrame:
+    """Add a row for every road and 30 minute window that has no record."""
+    road_columns = ["road_id", "road_name", "latitude", "longitude", "weather_station_id", "road_capacity"]
+    initial_rows = len(df)
+
+    roads = df[road_columns].drop_duplicates(subset="road_id")
+    windows = pd.date_range(df["timestamp"].min(), df["timestamp"].max(), freq="30min")
+    grid = roads.merge(pd.DataFrame({"timestamp": windows}), how="cross")
+    df = grid.merge(df.drop(columns=road_columns[1:]), on=["road_id", "timestamp"], how="left")
+
+    df["date"] = df["date"].fillna(df["timestamp"].dt.strftime("%Y-%m-%d").astype("string"))
+    df["time"] = df["time"].fillna(df["timestamp"].dt.strftime("%H:%M").astype("string"))
+    df = df.sort_values(["road_id", "timestamp"]).reset_index(drop=True)
+
+    print(f"\n[{dataset_name}] Missing windows added")
+    print(f"Rows before: {initial_rows}")
+    print(f"Rows added: {len(df) - initial_rows}")
+    print(f"Rows after: {len(df)}")
+    quality_report[f"{dataset_name}: missing windows added"] = len(df) - initial_rows
+    return df
+
+
+def handle_statistical_outliers(df: pd.DataFrame, dataset_name: str) -> pd.DataFrame:
+    """Cap values far outside the normal range of each road (3 x IQR)."""
+    df = df.copy()
+    capped = {}
+    for column in ["traffic_volume", "avg_speed"]:
+        q1 = df.groupby("road_id")[column].transform(lambda s: s.quantile(0.25))
+        q3 = df.groupby("road_id")[column].transform(lambda s: s.quantile(0.75))
+        lower = q1 - 3 * (q3 - q1)
+        upper = q3 + 3 * (q3 - q1)
+        capped[column] = int(((df[column] < lower) | (df[column] > upper)).sum())
+        df[column] = df[column].clip(lower, upper)
+
+    print(f"\n[{dataset_name}] Statistical outliers capped:")
+    print(capped)
+    quality_report[f"{dataset_name}: statistical outliers capped (3 x IQR)"] = sum(capped.values())
     return df
 
 
@@ -133,14 +185,18 @@ def fill_gaps(df: pd.DataFrame, group_column: str, columns: list[str], max_gap: 
 def handle_missing_values(df: pd.DataFrame, dataset_name: str) -> pd.DataFrame:
     """Fill missing traffic readings and quarantine rows that cannot be recovered."""
     sensor_columns = ["traffic_volume", "vehicle_count", "avg_speed", "occupancy", "travel_time"]
+    count_columns = ["accident_count", "signal_timing"]
 
     df = df.sort_values(["road_id", "timestamp"]).reset_index(drop=True)
-    before = df[sensor_columns].isna().sum()
+    before = df[sensor_columns + count_columns].isna().sum()
 
     time_of_day = df["timestamp"].dt.strftime("%H:%M")
     df = fill_gaps(df, "road_id", sensor_columns, 4, time_of_day)
+    for column in count_columns:
+        window_median = df.groupby(["road_id", time_of_day])[column].transform("median")
+        df[column] = df[column].fillna(window_median)
 
-    unrecoverable = df[sensor_columns].isna().any(axis=1)
+    unrecoverable = df[sensor_columns + count_columns].isna().any(axis=1)
     quarantine_rows(df[unrecoverable], dataset_name, "unrecoverable_missing")
     df = df.loc[~unrecoverable].reset_index(drop=True)
 
@@ -148,8 +204,10 @@ def handle_missing_values(df: pd.DataFrame, dataset_name: str) -> pd.DataFrame:
     print("Missing before :")
     print(before)
     print("Missing after :")
-    print(df[sensor_columns].isna().sum())
+    print(df[sensor_columns + count_columns].isna().sum())
     print(f"Rows quarantined : {int(unrecoverable.sum())}")
+    quality_report[f"{dataset_name}: missing sensor values before filling"] = int(before.sum())
+    quality_report[f"{dataset_name}: rows quarantined as unrecoverable"] = int(unrecoverable.sum())
     return df
 
 
@@ -167,6 +225,7 @@ def handle_missing_weather(df: pd.DataFrame, dataset_name: str) -> pd.DataFrame:
     print(before)
     print("Missing after :")
     print(df[weather_columns].isna().sum())
+    quality_report[f"{dataset_name}: missing weather values before filling"] = int(before.sum())
     return df
 
 
@@ -191,6 +250,8 @@ def derive_congestion_level(df: pd.DataFrame, dataset_name: str) -> pd.DataFrame
     print(f"Missing after: {int(df['congestion_level'].isna().sum())}")
     print(f"Existing labels that disagree with the rule: {mismatch} of {int(has_level.sum())}")
     print(df["congestion_level"].value_counts())
+    quality_report[f"{dataset_name}: congestion levels derived"] = missing_before
+    quality_report[f"{dataset_name}: existing labels that disagree with the rule"] = mismatch
     return df
 
 
@@ -248,7 +309,16 @@ def merge_datasets(traffic_df: pd.DataFrame, weather_df: pd.DataFrame, calendar_
     print(f"Merged columns: {len(merged_df.columns)}")
     print(f"Rows with no weather: {no_weather}")
     print(f"Rows with no calendar date: {no_calendar}")
+    quality_report["Merge: rows with no weather match"] = no_weather
+    quality_report["Merge: rows with no calendar match"] = no_calendar
     return merged_df
+
+
+def add_day_of_week(merged_data: pd.DataFrame) -> pd.DataFrame:
+    """Add day_of_week (Mon to Sun) from the timestamp."""
+    merged_data = merged_data.copy()
+    merged_data["day_of_week"] = merged_data["timestamp"].dt.day_name().str[:3]
+    return merged_data
 
 
 def inspect_merged_dataset(merged_data: pd.DataFrame) -> None:
@@ -268,6 +338,76 @@ def inspect_merged_dataset(merged_data: pd.DataFrame) -> None:
     print(merged_data["weather_condition"].value_counts(dropna=False))
 
 
+def validate_merged_dataset(merged_data: pd.DataFrame) -> None:
+    """Stop the run if the merged dataset fails the final checks."""
+    optional_columns = ["holiday_name", "event_name", "vehicle_type_dist"]
+    modelling_columns = [column for column in merged_data.columns if column not in optional_columns]
+
+    null_counts = merged_data[modelling_columns].isna().sum()
+    null_counts = null_counts[null_counts > 0]
+    if not null_counts.empty:
+        raise ValueError(f"Nulls found in modelling columns: {null_counts.to_dict()}")
+
+    expected_rows = merged_data["road_id"].nunique() * merged_data["timestamp"].nunique()
+    if len(merged_data) != expected_rows:
+        raise ValueError(f"Expected {expected_rows} rows, found {len(merged_data)}")
+
+    if merged_data.duplicated(subset=["road_id", "timestamp"]).any():
+        raise ValueError("Duplicate road/timestamp rows found")
+
+    for column, (low, high) in VALUE_LIMITS.items():
+        if column not in merged_data.columns:
+            continue
+        if low is not None and (merged_data[column] < low).any():
+            raise ValueError(f"{column} has values below {low}")
+        if high is not None and (merged_data[column] > high).any():
+            raise ValueError(f"{column} has values above {high}")
+
+    print("\nFinal validation passed")
+    quality_report["Final: rows (25 roads x every 30 minute window)"] = len(merged_data)
+    quality_report["Final: columns"] = len(merged_data.columns)
+    quality_report["Final: nulls in modelling columns"] = 0
+
+
+def write_data_quality_report() -> None:
+    """Write the data quality report to reports/data_quality.md."""
+    lines = [
+        "# Data Quality Report",
+        "",
+        "Written by `src/clean.py` every time the cleaning runs.",
+        "",
+        "## What was found and done",
+        "",
+        "| Check | Result |",
+        "|---|---|",
+    ]
+    for check, result in quality_report.items():
+        lines.append(f"| {check} | {result} |")
+
+    lines += [
+        "",
+        "## How each known defect was handled",
+        "",
+        "| Defect | Handling |",
+        "|---|---|",
+        "| Missing sensor windows | Missing rows added, gaps up to 2 hours interpolated, longer gaps use the road median for that time of day |",
+        "| Duplicate log rows | Exact duplicates dropped, then one row kept per road and timestamp |",
+        "| Impossible values | Negative values, speed above 200 and occupancy above 100 set to NaN and then filled |",
+        "| Hourly weather vs 30 minute traffic | Each traffic window takes the weather of its hour |",
+        "| Inconsistent weather labels | Lowercased, `rainy` set to `rain`, `foggy` set to `fog` |",
+        "| Mixed date formats | Each file parsed with its own format into one tz-aware timestamp |",
+        "| Missing congestion level | Derived from traffic volume divided by road capacity |",
+        "",
+        "## Notes",
+        "",
+        "- Congestion limits (0.25, 0.40, 0.50) were read from the rows that already had a label.",
+        "- Travel time was not capped by IQR because the high values are real heavy congestion.",
+        "- `vehicle_type_dist` is empty on the added windows, `holiday_name` and `event_name` are empty on normal days.",
+    ]
+    REPORT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    REPORT_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     tables = load_and_validate_tables()
@@ -279,7 +419,7 @@ def main() -> None:
         inspect_missing_values(data, name)
         inspect_duplicate_keys(data, name)
         inspect_numeric_ranges(data, name)
-    inspect_missing_windows(tables[TRAFFIC_FILE])
+    quality_report["Traffic: missing windows before cleaning"] = inspect_missing_windows(tables[TRAFFIC_FILE])
 
     traffic = remove_duplicate_traffic_records(tables[TRAFFIC_FILE])
     weather = remove_duplicate_keys(tables[WEATHER_FILE], ["station_id", "timestamp"], WEATHER_FILE)
@@ -289,16 +429,22 @@ def main() -> None:
     traffic = handle_invalid_numeric_values(traffic, TRAFFIC_FILE)
     weather = handle_invalid_numeric_values(weather, WEATHER_FILE)
 
+    traffic = add_missing_windows(traffic, TRAFFIC_FILE)
+    traffic = handle_statistical_outliers(traffic, TRAFFIC_FILE)
+
     traffic = handle_missing_values(traffic, TRAFFIC_FILE)
     weather = handle_missing_weather(weather, WEATHER_FILE)
     traffic = derive_congestion_level(traffic, TRAFFIC_FILE)
     traffic = convert_integer_columns(traffic, TRAFFIC_FILE)
 
     merged_data = merge_datasets(traffic, weather, calendar)
+    merged_data = add_day_of_week(merged_data)
     inspect_merged_dataset(merged_data)
+    validate_merged_dataset(merged_data)
 
     INTERIM_DIRECTORY.mkdir(parents=True, exist_ok=True)
     merged_data.to_csv(INTERIM_DIRECTORY / "merged.csv", index=False)
+    write_data_quality_report()
 
 
 if __name__ == "__main__":
