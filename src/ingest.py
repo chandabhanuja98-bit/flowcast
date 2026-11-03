@@ -1,9 +1,6 @@
 import logging
 from pathlib import Path
-
 import pandas as pd
-
-logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RAW_DATA_DIRECTORY = PROJECT_ROOT / "data" / "raw"
@@ -83,7 +80,6 @@ def quarantine_rows(rows: pd.DataFrame, dataset_name: str, reason: str) -> None:
         return
     QUARANTINE_DIRECTORY.mkdir(parents=True, exist_ok=True)
     rows.to_csv(path, index=False)
-    logger.warning("%s: %d rows quarantined (%s)", dataset_name, len(rows), reason)
 
 
 def load_csv(name: str) -> pd.DataFrame:
@@ -95,7 +91,7 @@ def load_csv(name: str) -> pd.DataFrame:
     data = pd.read_csv(path, dtype={column: "string" for column in string_columns})
     if data.empty:
         raise ValueError(f"{name} has no rows")
-    logger.info("Loaded %s: %d rows, %d columns", name, *data.shape)
+    
     return data
 
 
