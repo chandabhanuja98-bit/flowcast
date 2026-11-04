@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 REPORT_FILE = PROJECT_ROOT / "reports" / "data_quality.md"
 DATASET_VERSION = "v1"
 OPTIONAL_COLUMNS = ["vehicle_type_dist", "holiday_name", "event_name"]
-PEAK_HOURS = [(7,10),(14,19)]
+PEAK_HOURS = [(7,10),(16,20)]
 LAG_WINDOW = [1,2,48]
 ROLLING_WINDOWS = [4,8]
 LOW_VISIBILITY = 1000
@@ -15,6 +15,9 @@ CONGESTION_ORDER = {"Free-flow": 0, "Moderate": 1, "Heavy": 2, "Severe": 3}
 TEMPERATURE_BANDS = [-float("inf"), 15, 22, float("inf")]
 INTERIM_FILE = PROJECT_ROOT / "data" / "interim" / "merged.csv"
 PROCESSED_DIRECTORY = PROJECT_ROOT / "data" / "processed"
+
+TARGET_COLUMNS = ["target_volume", "target_travel_time", "target_congestion", "target_accident"]
+
 
 def create_temporial_features (df : pd.DataFrame) -> pd.DataFrame :
 
@@ -31,7 +34,7 @@ def create_temporial_features (df : pd.DataFrame) -> pd.DataFrame :
     is_peak = pd.Series(False,index=df.index)
 
     for start,end in PEAK_HOURS :
-        is_peak |= (hour>=start) & (hour<=end)
+        is_peak |= (hour>=start) & (hour<end)
     df["is_peak"] = is_peak.astype(int)
 
     return df
@@ -96,6 +99,7 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     df = create_weather_features(df)
     df = encode_categorical_features(df)
     df = create_calendar_features(df)
+    df = create_targets(df)
     return df
 
 def validate_features(df: pd.DataFrame) -> None:
@@ -128,6 +132,7 @@ def save_processed_dataset(df: pd.DataFrame, original_columns: list[str], rows_d
         "time_to": str(df["timestamp"].max()),
         "rows_dropped_no_history": rows_dropped,
         "feature_columns": [column for column in df.columns if column not in original_columns],
+        "target_columns" : TARGET_COLUMNS
     }
     info_file = PROCESSED_DIRECTORY / f"features_{DATASET_VERSION}.json"
     info_file.write_text(json.dumps(info, indent=2), encoding="utf-8")
@@ -146,13 +151,24 @@ def update_data_quality_report(info: dict) -> None:
         f"| Version | {info['version']} |",
         f"| Source | {info['source']} |",
         f"| Rows | {info['rows']} |",
-        f"| Columns | {info['columns']} ({len(info['feature_columns'])} engineered) |",
+        f"| Columns | {info['columns']} ({len(info['feature_columns'])} engineered), {len(info['target_columns'])} targets | ",
+        f"| Targets | {','.join(info['target_columns'])} | ",
         f"| Roads | {info['roads']} |",
         f"| Time range | {info['time_from']} to {info['time_to']} |",
         f"| Rows dropped (no lag or rolling history yet) | {info['rows_dropped_no_history']} |",
         "| Nulls in modelling columns | 0 |",
     ]
     REPORT_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+def create_targets(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.sort_values(["road_id", "timestamp"]).copy()
+    grouped = df.groupby("road_id")
+    df["target_volume"] = grouped["traffic_volume"].shift(-1)
+    df["target_travel_time"] = grouped["travel_time"].shift(-1)
+    df["target_congestion"] = grouped["congestion_code"].shift(-1)
+    next_accidents = grouped["accident_count"].shift(-1)
+    df["target_accident"] = (next_accidents > 0).astype(float).where(next_accidents.notna())
+    return df
 
 def main() -> None:
     df = pd.read_csv(INTERIM_FILE)
@@ -162,7 +178,9 @@ def main() -> None:
     
     history_columns = [column for column in df.columns if "_lag_" in column or "_roll_" in column]
     rows_before = len(df)
-    df = df.dropna(subset=history_columns).reset_index(drop=True)
+    df = df.dropna(subset=history_columns+TARGET_COLUMNS).reset_index(drop=True)
+    for column in ["target_volume","target_congestion","target_accident"] :
+        df[column] = df[column].astype(int)
     print(f"Rows before: {rows_before}")
     print(f"Rows dropped (no history yet): {rows_before - len(df)}")
     print(f"Rows after: {len(df)}")
