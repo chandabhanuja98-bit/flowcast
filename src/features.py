@@ -131,7 +131,7 @@ def save_processed_dataset(df: pd.DataFrame, original_columns: list[str], rows_d
         "time_from": str(df["timestamp"].min()),
         "time_to": str(df["timestamp"].max()),
         "rows_dropped_no_history": rows_dropped,
-        "feature_columns": [column for column in df.columns if column not in original_columns],
+        "feature_columns": [column for column in df.columns if column not in original_columns and column not in TARGET_COLUMNS], 
         "target_columns" : TARGET_COLUMNS
     }
     info_file = PROCESSED_DIRECTORY / f"features_{DATASET_VERSION}.json"
@@ -186,8 +186,6 @@ def main() -> None:
     print(f"Rows after: {len(df)}")
     print(f"Columns: {len(df.columns)}")
 
-    PROCESSED_DIRECTORY.mkdir(parents=True, exist_ok=True)
-    df.to_csv(PROCESSED_DIRECTORY / "features.csv", index=False)
 
     validate_features(df)
     info = save_processed_dataset(df,original_columns,rows_before-len(df))

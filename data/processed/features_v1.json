@@ -1,6 +1,6 @@
 {
   "version": "v1",
-  "created": "2026-11-04T14:51:28+00:00",
+  "created": "2026-11-04T15:00:21+00:00",
   "source": "data\\interim\\merged.csv",
   "rows": 179975,
   "columns": 65,
@@ -42,11 +42,7 @@
     "weather_rain",
     "holiday_peak",
     "event_yesterday",
-    "event_tomorrow",
-    "target_volume",
-    "target_travel_time",
-    "target_congestion",
-    "target_accident"
+    "event_tomorrow"
   ],
   "target_columns": [
     "target_volume",

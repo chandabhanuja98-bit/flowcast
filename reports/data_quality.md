@@ -54,7 +54,7 @@ Written by `src/clean.py` every time the cleaning runs.
 | Version | v1 |
 | Source | data\interim\merged.csv |
 | Rows | 179975 |
-| Columns | 65 (38 engineered), 4 targets | 
+| Columns | 65 (34 engineered), 4 targets | 
 | Targets | target_volume,target_travel_time,target_congestion,target_accident | 
 | Roads | 25 |
 | Time range | 2025-01-02 00:00:00+05:30 to 2025-05-31 23:00:00+05:30 |
