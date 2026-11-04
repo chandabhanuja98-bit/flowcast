@@ -46,3 +46,16 @@ Written by `src/clean.py` every time the cleaning runs.
 - Congestion limits (0.25, 0.40, 0.50) were read from the rows that already had a label.
 - Travel time was not capped by IQR because the high values are real heavy congestion.
 - `vehicle_type_dist` is empty on the added windows, `holiday_name` and `event_name` are empty on normal days.
+
+## Processed dataset
+
+| Check | Result |
+|---|---|
+| Version | v1 |
+| Source | data\interim\merged.csv |
+| Rows | 180000 |
+| Columns | 61 (34 engineered) |
+| Roads | 25 |
+| Time range | 2025-01-02 00:00:00+05:30 to 2025-05-31 23:30:00+05:30 |
+| Rows dropped (no lag or rolling history yet) | 1200 |
+| Nulls in modelling columns | 0 |

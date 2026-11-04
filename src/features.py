@@ -1,7 +1,12 @@
 import pandas as pd
 import numpy as np
 from ingest import PROJECT_ROOT,TIMEZONE
+import json 
+from datetime import datetime, timezone
 
+REPORT_FILE = PROJECT_ROOT / "reports" / "data_quality.md"
+DATASET_VERSION = "v1"
+OPTIONAL_COLUMNS = ["vehicle_type_dist", "holiday_name", "event_name"]
 PEAK_HOURS = [(7,10),(14,19)]
 LAG_WINDOW = [1,2,48]
 ROLLING_WINDOWS = [4,8]
@@ -26,7 +31,7 @@ def create_temporial_features (df : pd.DataFrame) -> pd.DataFrame :
     is_peak = pd.Series(False,index=df.index)
 
     for start,end in PEAK_HOURS :
-        is_peak = (hour>=start) & (hour<=end)
+        is_peak |= (hour>=start) & (hour<=end)
     df["is_peak"] = is_peak.astype(int)
 
     return df
@@ -93,11 +98,68 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     df = create_calendar_features(df)
     return df
 
+def validate_features(df: pd.DataFrame) -> None:
+    modelling_columns = [column for column in df.columns if column not in OPTIONAL_COLUMNS]
+    null_counts = df[modelling_columns].isna().sum()
+    null_counts = null_counts[null_counts > 0]
+    if not null_counts.empty:
+        raise ValueError(f"Nulls found in modelling columns: {null_counts.to_dict()}")
+
+    if df.duplicated(subset=["road_id", "timestamp"]).any():
+        raise ValueError("Duplicate road/timestamp rows found")
+
+    if df.groupby("road_id").size().nunique() != 1:
+        raise ValueError("Roads have a different number of rows")
+    print("Feature validation passed")
+
+def save_processed_dataset(df: pd.DataFrame, original_columns: list[str], rows_dropped: int) -> dict:
+    PROCESSED_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    data_file = PROCESSED_DIRECTORY / f"features_{DATASET_VERSION}.csv"
+    df.to_csv(data_file, index=False)
+
+    info = {
+        "version": DATASET_VERSION,
+        "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "source": str(INTERIM_FILE.relative_to(PROJECT_ROOT)),
+        "rows": len(df),
+        "columns": len(df.columns),
+        "roads": int(df["road_id"].nunique()),
+        "time_from": str(df["timestamp"].min()),
+        "time_to": str(df["timestamp"].max()),
+        "rows_dropped_no_history": rows_dropped,
+        "feature_columns": [column for column in df.columns if column not in original_columns],
+    }
+    info_file = PROCESSED_DIRECTORY / f"features_{DATASET_VERSION}.json"
+    info_file.write_text(json.dumps(info, indent=2), encoding="utf-8")
+    print(f"Saved {data_file.name} and {info_file.name}")
+    return info
+
+def update_data_quality_report(info: dict) -> None:
+    report = REPORT_FILE.read_text(encoding="utf-8").split("## Processed dataset")[0].rstrip()
+    lines = [
+        report,
+        "",
+        "## Processed dataset",
+        "",
+        "| Check | Result |",
+        "|---|---|",
+        f"| Version | {info['version']} |",
+        f"| Source | {info['source']} |",
+        f"| Rows | {info['rows']} |",
+        f"| Columns | {info['columns']} ({len(info['feature_columns'])} engineered) |",
+        f"| Roads | {info['roads']} |",
+        f"| Time range | {info['time_from']} to {info['time_to']} |",
+        f"| Rows dropped (no lag or rolling history yet) | {info['rows_dropped_no_history']} |",
+        "| Nulls in modelling columns | 0 |",
+    ]
+    REPORT_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
 def main() -> None:
     df = pd.read_csv(INTERIM_FILE)
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.tz_convert(TIMEZONE)
+    original_columns = df.columns.to_list()
     df = build_features(df)
-
+    
     history_columns = [column for column in df.columns if "_lag_" in column or "_roll_" in column]
     rows_before = len(df)
     df = df.dropna(subset=history_columns).reset_index(drop=True)
@@ -108,6 +170,10 @@ def main() -> None:
 
     PROCESSED_DIRECTORY.mkdir(parents=True, exist_ok=True)
     df.to_csv(PROCESSED_DIRECTORY / "features.csv", index=False)
+
+    validate_features(df)
+    info = save_processed_dataset(df,original_columns,rows_before-len(df))
+    update_data_quality_report(info)
 
 
 if __name__ == "__main__":
