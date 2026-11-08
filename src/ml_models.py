@@ -4,6 +4,9 @@ import numpy as np
 from features import TARGET_COLUMNS,DATASET_VERSION,PROCESSED_DIRECTORY
 from sklearn.linear_model import LinearRegression
 from evaluate import regression_metrics
+from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
+from sklearn.tree import DecisionTreeRegressor, export_text
+
 
 
 SCOREBOARD_FILE = PROJECT_ROOT / "reports" / "regression_scoreboard.csv"
@@ -11,6 +14,7 @@ SCOREBOARD_FILE = PROJECT_ROOT / "reports" / "regression_scoreboard.csv"
 TRAIN_SHARE = 0.70
 VALIDATION_SHARE = 0.15
 REGRESSION_TARGETS = ["target_volume", "target_travel_time"]
+RANDOM_SEED = 42
 
 def load_dataset(path) -> pd.DataFrame:
     df = pd.read_csv(path)
@@ -103,6 +107,40 @@ def run_linear_regression(train: pd.DataFrame, validation: pd.DataFrame, test: p
                 rows.append({"target": target, "model": name, "split": split, **metrics})
     return pd.DataFrame(rows)
 
+def run_decision_tree(train: pd.DataFrame, validation: pd.DataFrame, test: pd.DataFrame, feature_columns: list[str]) -> pd.DataFrame:
+    x = {
+        "train": train[feature_columns].to_numpy(dtype=float),
+        "validation": validation[feature_columns].to_numpy(dtype=float),
+        "test": test[feature_columns].to_numpy(dtype=float),
+    }
+    grid = {"max_depth": [6, 10, 14], "min_samples_leaf": [5, 20, 50]}
+
+    rows = []
+    for target in REGRESSION_TARGETS:
+        y = {
+            "train": train[target].to_numpy(dtype=float),
+            "validation": validation[target].to_numpy(dtype=float),
+            "test": test[target].to_numpy(dtype=float),
+        }
+        print(f"\n===== Decision Tree: {target} =====")
+        search = GridSearchCV(
+            DecisionTreeRegressor(random_state=RANDOM_SEED),
+            grid,
+            cv=TimeSeriesSplit(n_splits=3),
+            scoring="neg_root_mean_squared_error",
+        )
+        search.fit(x["train"], y["train"])
+        model = search.best_estimator_
+        print(f"Best parameters: {search.best_params_}")
+        for split in ["validation", "test"]:
+            metrics = regression_metrics(y[split], model.predict(x[split]))
+            rows.append({"target": target, "model": "Decision Tree", "split": split, **metrics})
+
+        if target == "target_volume":
+            print("\nTop rules of the tree:")
+            print(export_text(model, feature_names=feature_columns, max_depth=3))
+    return pd.DataFrame(rows)
+
 def show_scoreboard(scoreboard: pd.DataFrame) -> None:
     for target in REGRESSION_TARGETS:
         for split in ["validation", "test"]:
@@ -117,14 +155,15 @@ def main():
     feature_columns = get_feature_columns(data)
     print(feature_columns)
     train, validation, test = time_split(data)
-    scoreboard = run_linear_regression(train,validation,test,feature_columns)
+    linear_scoreboard = run_linear_regression(train,validation,test,feature_columns)
+    tree_scoreboard = run_decision_tree(train,validation,test,feature_columns)
+    scoreboard = pd.concat([linear_scoreboard, tree_scoreboard], ignore_index=True)
     show_scoreboard(scoreboard)
 
     SCOREBOARD_FILE.parent.mkdir(parents=True, exist_ok=True)
     scoreboard.to_csv(SCOREBOARD_FILE, index=False)
 
-
-    
+ 
 
 
 
