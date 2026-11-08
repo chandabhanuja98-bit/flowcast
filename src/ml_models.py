@@ -6,7 +6,7 @@ from sklearn.linear_model import LinearRegression
 from evaluate import regression_metrics
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 from sklearn.tree import DecisionTreeRegressor, export_text
-
+from sklearn.ensemble import RandomForestRegressor
 
 
 SCOREBOARD_FILE = PROJECT_ROOT / "reports" / "regression_scoreboard.csv"
@@ -141,12 +141,47 @@ def run_decision_tree(train: pd.DataFrame, validation: pd.DataFrame, test: pd.Da
             print(export_text(model, feature_names=feature_columns, max_depth=3))
     return pd.DataFrame(rows)
 
+def run_random_forest(train: pd.DataFrame, validation: pd.DataFrame, test: pd.DataFrame, feature_columns: list[str]) -> pd.DataFrame:
+    x = {
+        "train": train[feature_columns].to_numpy(dtype=float),
+        "validation": validation[feature_columns].to_numpy(dtype=float),
+        "test": test[feature_columns].to_numpy(dtype=float),
+    }
+    grid = {"max_depth": [10, 16], "min_samples_leaf": [5, 20]}
+
+    rows = []
+    for target in REGRESSION_TARGETS:
+        y = {
+            "train": train[target].to_numpy(dtype=float),
+            "validation": validation[target].to_numpy(dtype=float),
+            "test": test[target].to_numpy(dtype=float),
+        }
+        print(f"\n===== Random Forest: {target} =====")
+        search = GridSearchCV(
+            RandomForestRegressor(n_estimators=100, random_state=RANDOM_SEED, n_jobs=-1),
+            grid,
+            cv=TimeSeriesSplit(n_splits=3),
+            scoring="neg_root_mean_squared_error",
+        )
+        search.fit(x["train"], y["train"])
+        model = search.best_estimator_
+        print(f"Best parameters: {search.best_params_}")
+        for split in ["validation", "test"]:
+            metrics = regression_metrics(y[split], model.predict(x[split]))
+            rows.append({"target": target, "model": "Random Forest", "split": split, **metrics})
+
+        importance = pd.Series(model.feature_importances_, index=feature_columns).sort_values(ascending=False)
+        print(f"\nTop 10 features for {target}:")
+        print(importance.head(10).round(4).to_string())
+    return pd.DataFrame(rows)
+
 def show_scoreboard(scoreboard: pd.DataFrame) -> None:
     for target in REGRESSION_TARGETS:
         for split in ["validation", "test"]:
             part = scoreboard[(scoreboard["target"] == target) & (scoreboard["split"] == split)]
             print(f"\n{target} - {split}")
             print(part[["model", "RMSE", "MAE", "MAPE", "R2"]].round(3).to_string(index=False))
+
 
 def main():
     
@@ -157,7 +192,8 @@ def main():
     train, validation, test = time_split(data)
     linear_scoreboard = run_linear_regression(train,validation,test,feature_columns)
     tree_scoreboard = run_decision_tree(train,validation,test,feature_columns)
-    scoreboard = pd.concat([linear_scoreboard, tree_scoreboard], ignore_index=True)
+    forest_scoreboard = run_random_forest(train,validation,test,feature_columns)
+    scoreboard = pd.concat([linear_scoreboard, tree_scoreboard, forest_scoreboard], ignore_index=True)
     show_scoreboard(scoreboard)
 
     SCOREBOARD_FILE.parent.mkdir(parents=True, exist_ok=True)
