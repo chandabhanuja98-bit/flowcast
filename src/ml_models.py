@@ -3,11 +3,14 @@ from ingest import TIMEZONE,PROJECT_ROOT
 import numpy as np
 from features import TARGET_COLUMNS,DATASET_VERSION,PROCESSED_DIRECTORY
 from sklearn.linear_model import LinearRegression
-from evaluate import regression_metrics
+from evaluate import regression_metrics, multiclass_metrics, confusion_matrix, binary_metrics
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
-from sklearn.tree import DecisionTreeRegressor, export_text
-from sklearn.ensemble import RandomForestRegressor
-from xgboost import XGBRegressor
+from sklearn.tree import DecisionTreeRegressor, export_text, DecisionTreeClassifier
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.utils.class_weight import compute_sample_weight
+from xgboost import XGBRegressor, XGBClassifier
+import sys 
+from sklearn.svm import SVC
 
 
 SCOREBOARD_FILE = PROJECT_ROOT / "reports" / "regression_scoreboard.csv"
@@ -16,6 +19,10 @@ TRAIN_SHARE = 0.70
 VALIDATION_SHARE = 0.15
 REGRESSION_TARGETS = ["target_volume", "target_travel_time"]
 RANDOM_SEED = 42
+
+CLASSIFICATION_TARGETS = ["target_congestion", "target_accident"]
+CLASSIFICATION_FILE = PROJECT_ROOT / "reports" / "classification_scoreboard.csv"
+SVM_SAMPLE_SIZE = 20000
 
 def load_dataset(path) -> pd.DataFrame:
     df = pd.read_csv(path)
@@ -210,6 +217,133 @@ def run_xgboost(train: pd.DataFrame, validation: pd.DataFrame, test: pd.DataFram
         print(importance.head(10).round(4).to_string())
     return pd.DataFrame(rows)
 
+def run_svm(train: pd.DataFrame, validation: pd.DataFrame, test: pd.DataFrame, feature_columns: list[str]) -> pd.DataFrame:
+    raw = {
+        "train": train[feature_columns].to_numpy(dtype=float),
+        "validation": validation[feature_columns].to_numpy(dtype=float),
+        "test": test[feature_columns].to_numpy(dtype=float),
+    }
+    mean, std = fit_scaler(raw["train"])
+    x = {name: apply_scaler(values, mean, std) for name, values in raw.items()}
+    sample = np.random.default_rng(RANDOM_SEED).choice(len(x["train"]), SVM_SAMPLE_SIZE, replace=False)
+
+    rows = []
+    for target in CLASSIFICATION_TARGETS:
+        y = {
+            "train": train[target].to_numpy(dtype=int),
+            "validation": validation[target].to_numpy(dtype=int),
+            "test": test[target].to_numpy(dtype=int),
+        }
+        print(f"\n===== SVM: {target} =====")
+        model = SVC(kernel="rbf", class_weight="balanced", random_state=RANDOM_SEED)
+        model.fit(x["train"][sample], y["train"][sample])
+        for split in ["validation", "test"]:
+            predicted = model.predict(x[split])
+            if target == "target_congestion":
+                metrics = multiclass_metrics(y[split], predicted, [0, 1, 2, 3])
+                if split == "test":
+                    print("Confusion matrix (test): rows = real class, columns = predicted class")
+                    print(confusion_matrix(y[split], predicted, [0, 1, 2, 3]))
+            else:
+                metrics = binary_metrics(y[split], predicted, model.decision_function(x[split]))
+            rows.append({"target": target, "model": "SVM", "split": split, **metrics})
+    return pd.DataFrame(rows)
+
+def show_classification_scoreboard(scoreboard: pd.DataFrame) -> None:
+    for target in CLASSIFICATION_TARGETS:
+        for split in ["validation", "test"]:
+            part = scoreboard[(scoreboard["target"] == target) & (scoreboard["split"] == split)]
+            part = part.drop(columns=["target", "split"]).dropna(axis=1, how="all")
+            print(f"\n{target} - {split}")
+            print(part.round(3).to_string(index=False))
+
+def run_decision_tree_classifier(train: pd.DataFrame, validation: pd.DataFrame, test: pd.DataFrame, feature_columns: list[str]) -> pd.DataFrame:
+    x = {
+        "train": train[feature_columns].to_numpy(dtype=float),
+        "validation": validation[feature_columns].to_numpy(dtype=float),
+        "test": test[feature_columns].to_numpy(dtype=float),
+    }
+    grid = {"max_depth": [6, 10, 14], "min_samples_leaf": [5, 20, 50]}
+    scoring = {"target_congestion": "f1_macro", "target_accident": "roc_auc"}
+
+    rows = []
+    for target in CLASSIFICATION_TARGETS:
+        y = {
+            "train": train[target].to_numpy(dtype=int),
+            "validation": validation[target].to_numpy(dtype=int),
+            "test": test[target].to_numpy(dtype=int),
+        }
+        print(f"\n===== Decision Tree classifier: {target} =====")
+        search = GridSearchCV(
+            DecisionTreeClassifier(class_weight="balanced", random_state=RANDOM_SEED),
+            grid,
+            cv=TimeSeriesSplit(n_splits=3),
+            scoring=scoring[target],
+        )
+        search.fit(x["train"], y["train"])
+        model = search.best_estimator_
+        print(f"Best parameters: {search.best_params_}")
+        for split in ["validation", "test"]:
+            predicted = model.predict(x[split])
+            if target == "target_congestion":
+                metrics = multiclass_metrics(y[split], predicted, [0, 1, 2, 3])
+                if split == "test":
+                    print("Confusion matrix (test): rows = real class, columns = predicted class")
+                    print(confusion_matrix(y[split], predicted, [0, 1, 2, 3]))
+            else:
+                metrics = binary_metrics(y[split], predicted, model.predict_proba(x[split])[:, 1])
+            rows.append({"target": target, "model": "Decision Tree", "split": split, **metrics})
+    return pd.DataFrame(rows)
+
+def run_ensemble_classifiers(train: pd.DataFrame, validation: pd.DataFrame, test: pd.DataFrame, feature_columns: list[str]) -> pd.DataFrame:
+    x = {
+        "train": train[feature_columns].to_numpy(dtype=float),
+        "validation": validation[feature_columns].to_numpy(dtype=float),
+        "test": test[feature_columns].to_numpy(dtype=float),
+    }
+    scoring = {"target_congestion": "f1_macro", "target_accident": "roc_auc"}
+
+    rows = []
+    for target in CLASSIFICATION_TARGETS:
+        y = {
+            "train": train[target].to_numpy(dtype=int),
+            "validation": validation[target].to_numpy(dtype=int),
+            "test": test[target].to_numpy(dtype=int),
+        }
+        weights = compute_sample_weight("balanced", y["train"])
+        models = [
+            (
+                "Random Forest",
+                RandomForestClassifier(n_estimators=100, class_weight="balanced_subsample", random_state=RANDOM_SEED, n_jobs=-1),
+                {"max_depth": [10, 16], "min_samples_leaf": [5, 20]},
+                {},
+            ),
+            (
+                "XGBoost",
+                XGBClassifier(n_estimators=300, random_state=RANDOM_SEED, n_jobs=-1),
+                {"max_depth": [4, 6], "learning_rate": [0.05, 0.1]},
+                {"sample_weight": weights},
+            ),
+        ]
+        for name, estimator, grid, fit_params in models:
+            print(f"\n===== {name} classifier: {target} =====")
+            search = GridSearchCV(estimator, grid, cv=TimeSeriesSplit(n_splits=3), scoring=scoring[target])
+            search.fit(x["train"], y["train"], **fit_params)
+            model = search.best_estimator_
+            print(f"Best parameters: {search.best_params_}")
+            for split in ["validation", "test"]:
+                predicted = model.predict(x[split])
+                if target == "target_congestion":
+                    metrics = multiclass_metrics(y[split], predicted, [0, 1, 2, 3])
+                    if split == "test":
+                        print("Confusion matrix (test): rows = real class, columns = predicted class")
+                        print(confusion_matrix(y[split], predicted, [0, 1, 2, 3]))
+                else:
+                    metrics = binary_metrics(y[split], predicted, model.predict_proba(x[split])[:, 1])
+                rows.append({"target": target, "model": name, "split": split, **metrics})
+    return pd.DataFrame(rows)
+
+
 def show_scoreboard(scoreboard: pd.DataFrame) -> None:
     for target in REGRESSION_TARGETS:
         for split in ["validation", "test"]:
@@ -225,6 +359,17 @@ def main():
     feature_columns = get_feature_columns(data)
     print(feature_columns)
     train, validation, test = time_split(data)
+
+    if len(sys.argv) > 1 and sys.argv[1] == "classification":
+        svm_scoreboard = run_svm(train,validation,test,feature_columns)
+        tree_classifier_scoreboard = run_decision_tree_classifier(train,validation,test,feature_columns)
+        ensemble_scoreboard = run_ensemble_classifiers(train,validation,test,feature_columns)
+        classification_scoreboard = pd.concat([svm_scoreboard, tree_classifier_scoreboard, ensemble_scoreboard], ignore_index=True)
+        show_classification_scoreboard(classification_scoreboard)
+        CLASSIFICATION_FILE.parent.mkdir(parents=True, exist_ok=True)
+        classification_scoreboard.to_csv(CLASSIFICATION_FILE, index=False)
+        return
+    
     linear_scoreboard = run_linear_regression(train,validation,test,feature_columns)
     tree_scoreboard = run_decision_tree(train,validation,test,feature_columns)
     forest_scoreboard = run_random_forest(train,validation,test,feature_columns)
@@ -234,10 +379,7 @@ def main():
 
     SCOREBOARD_FILE.parent.mkdir(parents=True, exist_ok=True)
     scoreboard.to_csv(SCOREBOARD_FILE, index=False)
-
  
-
-
 
 if __name__ == "__main__" :
     main()
