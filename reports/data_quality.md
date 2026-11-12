@@ -52,7 +52,7 @@ Written by `src/clean.py` every time the cleaning runs.
 | Check | Result |
 |---|---|
 | Version | v1 |
-| Source | data/interim/merged.csv |
+| Source | data\interim\merged.csv |
 | Rows | 172775 |
 | Columns | 83 (52 engineered), 4 targets | 
 | Targets | target_volume,target_travel_time,target_congestion,target_accident | 
