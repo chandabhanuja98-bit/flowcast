@@ -1,1 +1,4 @@
 myenv
+__pycache__/
+*.pyc
+data/processed/features_v1.csv

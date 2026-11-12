@@ -52,11 +52,11 @@ Written by `src/clean.py` every time the cleaning runs.
 | Check | Result |
 |---|---|
 | Version | v1 |
-| Source | data\interim\merged.csv |
-| Rows | 179975 |
-| Columns | 65 (34 engineered), 4 targets | 
+| Source | data/interim/merged.csv |
+| Rows | 172775 |
+| Columns | 83 (52 engineered), 4 targets | 
 | Targets | target_volume,target_travel_time,target_congestion,target_accident | 
 | Roads | 25 |
-| Time range | 2025-01-02 00:00:00+05:30 to 2025-05-31 23:00:00+05:30 |
-| Rows dropped (no lag or rolling history yet) | 1225 |
+| Time range | 2025-01-08 00:00:00+05:30 to 2025-05-31 23:00:00+05:30 |
+| Rows dropped (no lag or rolling history yet) | 8425 |
 | Nulls in modelling columns | 0 |

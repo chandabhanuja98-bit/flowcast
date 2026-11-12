@@ -1,0 +1,139 @@
+{
+  "model": "LSTM",
+  "trained_at": "2026-11-11T17:31:38+00:00",
+  "dataset_version": "v1",
+  "training_window": {
+    "from": "2025-01-08 00:00:00+05:30",
+    "to": "2025-04-18 18:00:00+05:30",
+    "rows": 120925
+  },
+  "feature_count": 68,
+  "feature_columns": [
+    "latitude",
+    "longitude",
+    "road_capacity",
+    "traffic_volume",
+    "vehicle_count",
+    "avg_speed",
+    "occupancy",
+    "travel_time",
+    "accident_count",
+    "signal_timing",
+    "temperature",
+    "rainfall",
+    "visibility",
+    "public_holiday",
+    "event_flag",
+    "roadwork_flag",
+    "hour_sin",
+    "hour_cos",
+    "day_sin",
+    "day_cos",
+    "is_weekend",
+    "is_peak",
+    "volume_lag_1",
+    "speed_lag_1",
+    "volume_lag_2",
+    "speed_lag_2",
+    "volume_lag_48",
+    "speed_lag_48",
+    "volume_lag_336",
+    "speed_lag_336",
+    "volume_roll_mean_4",
+    "volume_roll_std_4",
+    "speed_roll_mean_4",
+    "speed_roll_std_4",
+    "volume_roll_mean_8",
+    "volume_roll_std_8",
+    "speed_roll_mean_8",
+    "speed_roll_std_8",
+    "volume_capacity_ratio",
+    "headroom",
+    "volume_change_1",
+    "volume_change_2",
+    "speed_change_1",
+    "ratio_change_1",
+    "volume_vs_mean_4",
+    "slot_mean_volume",
+    "next_slot_mean_volume",
+    "next_slot_mean_ratio",
+    "volume_vs_next_slot_mean",
+    "next_hour_sin",
+    "next_hour_cos",
+    "next_is_peak",
+    "next_is_weekend",
+    "network_mean_ratio",
+    "network_mean_speed",
+    "ratio_vs_network",
+    "is_rain",
+    "is_low_visibility",
+    "temperature_band",
+    "congestion_code",
+    "weather_clear",
+    "weather_cloudy",
+    "weather_fog",
+    "weather_overcast",
+    "weather_rain",
+    "holiday_peak",
+    "event_yesterday",
+    "event_tomorrow"
+  ],
+  "hyperparameters": {
+    "cell": "lstm",
+    "seq": 36,
+    "hidden": 96,
+    "layers": 2,
+    "dropout": 0.4,
+    "lr": 0.0005,
+    "batch": 256,
+    "aux": 0.3,
+    "epochs": 30,
+    "patience": 5,
+    "save": 1
+  },
+  "epochs_run": 23,
+  "metrics": {
+    "target_volume": {
+      "validation": {
+        "RMSE": 52.85878727519164,
+        "MAE": 36.03245527011794,
+        "MAPE": 8.833882046153697,
+        "R2": 0.9635288116874718
+      },
+      "test": {
+        "RMSE": 54.0723724292074,
+        "MAE": 36.74175021459419,
+        "MAPE": 8.833464098381599,
+        "R2": 0.9645590147551066
+      }
+    },
+    "target_congestion": {
+      "validation": {
+        "accuracy": 0.8650723240115719,
+        "macro_precision": 0.7378536688057934,
+        "macro_recall": 0.790943450193418,
+        "macro_F1": 0.7611347976171496
+      },
+      "test": {
+        "accuracy": 0.8667309546769527,
+        "macro_precision": 0.7452496315185675,
+        "macro_recall": 0.7949090239090927,
+        "macro_F1": 0.7670632164948152
+      }
+    },
+    "target_accident": {
+      "validation": {
+        "ROC_AUC": 0.5535122797233524,
+        "precision": 0.0,
+        "recall": 0.0,
+        "F1": 0.0
+      },
+      "test": {
+        "ROC_AUC": 0.6309210806980837,
+        "precision": 0.0,
+        "recall": 0.0,
+        "F1": 0.0
+      }
+    }
+  }
+}

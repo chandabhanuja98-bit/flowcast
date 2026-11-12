@@ -1,4 +1,6 @@
 pandas
 numpy
-scikitlearn
+scikit-learn
 xgboost
+joblib
+torch

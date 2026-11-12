@@ -8,7 +8,7 @@ REPORT_FILE = PROJECT_ROOT / "reports" / "data_quality.md"
 DATASET_VERSION = "v1"
 OPTIONAL_COLUMNS = ["vehicle_type_dist", "holiday_name", "event_name"]
 PEAK_HOURS = [(7,10),(16,20)]
-LAG_WINDOW = [1,2,48]
+LAG_WINDOW = [1,2,48,336]
 ROLLING_WINDOWS = [4,8]
 LOW_VISIBILITY = 1000
 CONGESTION_ORDER = {"Free-flow": 0, "Moderate": 1, "Heavy": 2, "Severe": 3}
@@ -64,6 +64,39 @@ def create_capacity_features(df: pd.DataFrame) -> pd.DataFrame:
     df["headroom"] = df["road_capacity"] - df["traffic_volume"]
     return df
 
+
+def create_trend_features(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["volume_change_1"] = df["traffic_volume"] - df["volume_lag_1"]
+    df["volume_change_2"] = df["volume_lag_1"] - df["volume_lag_2"]
+    df["speed_change_1"] = df["avg_speed"] - df["speed_lag_1"]
+    df["ratio_change_1"] = df["volume_change_1"] / df["road_capacity"]
+    df["volume_vs_mean_4"] = df["traffic_volume"] - df["volume_roll_mean_4"]
+    return df
+
+
+def create_seasonal_features(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.sort_values(["road_id", "timestamp"]).copy()
+    slot = df["timestamp"].dt.hour * 2 + df["timestamp"].dt.minute // 30
+    df["slot_mean_volume"] = df.groupby(["road_id", slot])["traffic_volume"].transform(lambda s: s.shift(1).expanding().mean())
+
+    by_road = df.groupby("road_id")
+    df["next_slot_mean_volume"] = by_road["slot_mean_volume"].shift(-1)
+    df["next_slot_mean_ratio"] = df["next_slot_mean_volume"] / df["road_capacity"]
+    df["volume_vs_next_slot_mean"] = df["traffic_volume"] - df["next_slot_mean_volume"]
+    for column in ["hour_sin", "hour_cos", "is_peak", "is_weekend"]:
+        df[f"next_{column}"] = by_road[column].shift(-1)
+    return df
+
+
+def create_network_features(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    by_time = df.groupby("timestamp")
+    df["network_mean_ratio"] = by_time["volume_capacity_ratio"].transform("mean")
+    df["network_mean_speed"] = by_time["avg_speed"].transform("mean")
+    df["ratio_vs_network"] = df["volume_capacity_ratio"] - df["network_mean_ratio"]
+    return df
+
 def create_weather_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["is_rain"] = (df["rainfall"] > 0).astype(int)
@@ -96,6 +129,9 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     df = create_lag_features(df)
     df = create_rolling_features(df)
     df = create_capacity_features(df)
+    df = create_trend_features(df)
+    df = create_seasonal_features(df)
+    df = create_network_features(df)
     df = create_weather_features(df)
     df = encode_categorical_features(df)
     df = create_calendar_features(df)
