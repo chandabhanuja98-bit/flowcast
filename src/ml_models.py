@@ -11,6 +11,7 @@ from sklearn.utils.class_weight import compute_sample_weight
 from xgboost import XGBRegressor, XGBClassifier
 import sys 
 from sklearn.svm import SVC
+from sklearn.isotonic import IsotonicRegression
 from utils import save_model, load_model, model_path
 
 
@@ -425,6 +426,17 @@ def add_prediction_intervals(predictions: pd.DataFrame) -> pd.DataFrame:
     return predictions
 
 
+def calibrate_accident_risk(predictions: pd.DataFrame) -> pd.DataFrame:
+    calibration = predictions[predictions["split"] == "validation"]
+    calibrator = IsotonicRegression(y_min=0, y_max=1, out_of_bounds="clip")
+    calibrator.fit(calibration["accident_risk"], calibration["actual_accident"])
+    predictions["accident_probability"] = calibrator.predict(predictions["accident_risk"])
+
+    test = predictions[predictions["split"] == "test"]
+    print(f"accident: calibrated risk averages {test['accident_probability'].mean():.2%} on test, real rate {test['actual_accident'].mean():.2%}")
+    return predictions
+
+
 def choose_winners() -> dict[str, str]:
     scoreboard = pd.concat([pd.read_csv(SCOREBOARD_FILE), pd.read_csv(CLASSIFICATION_FILE)], ignore_index=True)
     scoreboard = scoreboard[(scoreboard["split"] == "validation") & ~scoreboard["model"].str.contains(r"\(")]
@@ -508,7 +520,7 @@ def main():
             [predict_windows(validation, winners).assign(split="validation"), predict_windows(test, winners).assign(split="test")],
             ignore_index=True,
         )
-        predictions = add_prediction_intervals(predictions)
+        predictions = calibrate_accident_risk(add_prediction_intervals(predictions))
         predictions.to_csv(PREDICTIONS_FILE, index=False)
         print(f"Saved {len(predictions)} predictions to {PREDICTIONS_FILE.name}")
         return

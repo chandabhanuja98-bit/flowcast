@@ -17,6 +17,7 @@ from ml_models import (
     RANDOM_SEED,
     add_prediction_intervals,
     apply_scaler,
+    calibrate_accident_risk,
     fit_scaler,
     get_feature_columns,
     load_dataset,
@@ -279,7 +280,7 @@ def predict_all(cell: str) -> None:
         actual = part[TARGET_COLUMNS].rename(columns=lambda column: "actual_" + column.removeprefix("target_"))
         frames.append(pd.concat([frame, actual], axis=1).assign(split=split))
 
-    predictions = add_prediction_intervals(pd.concat(frames, ignore_index=True))
+    predictions = calibrate_accident_risk(add_prediction_intervals(pd.concat(frames, ignore_index=True)))
     predictions.to_csv(predictions_file(cell), index=False)
     print(f"Saved {len(predictions)} predictions to {predictions_file(cell).name}")
 
