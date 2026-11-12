@@ -42,6 +42,26 @@ def corridor_summary(rows: pd.DataFrame) -> None:
             unsafe_allow_html=True,
         )
 
+def colour_level(level: str) -> str:
+    text = "#1f1f1f" if level == "Moderate" else "white"
+    return f"background-color:{severity_colour(level)};color:{text}"
+
+def segment_table(rows: pd.DataFrame) -> None:
+    low = rows["predicted_volume_lower"].round().astype(int).astype(str)
+    high = rows["predicted_volume_upper"].round().astype(int).astype(str)
+    table = pd.DataFrame({
+        "Road": rows["road_id"],
+        "Congestion": rows["predicted_congestion_level"],
+        "Confidence": rows["congestion_confidence"],
+        "Volume": rows["predicted_volume"],
+        "Volume range (90%)": low + " to " + high,
+        "Travel time (min)": rows["predicted_travel_time"],
+    })
+    styled = table.style.map(colour_level, subset=["Congestion"]).format(
+        {"Confidence": "{:.0%}", "Volume": "{:.0f}", "Travel time (min)": "{:.1f}"}
+    )
+    st.dataframe(styled, hide_index=True, width="stretch")
+
 
 def main() -> None:
     st.set_page_config(page_title="FlowCast",layout="wide")
@@ -55,7 +75,8 @@ def main() -> None:
     st.write(f"forecast_for {window:%A %d %B %Y , %H : %M}")
 
     corridor_summary(rows)
-    st.dataframe(rows)
+
+    segment_table(rows)
 
 
 
