@@ -24,12 +24,12 @@ def load_predictions(modified: float) -> pd.DataFrame :
         df[column] = pd.to_datetime(df[column],utc=True).dt.tz_convert(TIMEZONE)
     return df.sort_values(["forecast_for","road_id"])
 
-def pick_window(predictions:pd.DataFrame) -> pd.Timestamp :
+def pick_window(predictions:pd.DataFrame, date_box, time_box) -> pd.Timestamp :
     windows = predictions["forecast_for"].drop_duplicates().sort_values()
     days = windows.dt.date.unique()
-    day = st.sidebar.selectbox("Date", days, index=len(days) - 1)
+    day = date_box.selectbox("Date", days, index=len(days) - 1)
     times = windows[windows.dt.date == day]
-    return st.sidebar.selectbox("Forecast time", times, index=len(times) - 1, format_func=lambda time: f"{time:%H:%M}")
+    return time_box.selectbox("Forecast time", times, index=len(times) - 1, format_func=lambda time: f"{time:%H:%M}")
 
 def severity_colour(level: str) -> str:
     return SEVERITY_COLOURS.get(level, UNKNOWN_COLOUR)
@@ -70,8 +70,8 @@ def segment_table(rows: pd.DataFrame) -> None:
     st.dataframe(styled, hide_index=True, width="stretch")
     st.caption("Accident risk is the chance of an incident on that road in this window. A typical window is about 1%, so 2% means roughly double the usual risk.")
 
-def pick_road(rows: pd.DataFrame) -> pd.Series:
-    road = st.sidebar.selectbox("Road", rows["road_id"])
+def pick_road(rows: pd.DataFrame, road_box) -> pd.Series:
+    road = road_box.selectbox("Road", rows["road_id"])
     return rows[rows["road_id"] == road].iloc[0]
 
 def road_detail(road: pd.Series) -> None:
@@ -196,12 +196,14 @@ def comparison_view(history: pd.DataFrame) -> None:
 def live_view() -> None:
     """The existing live-prediction view."""
     predictions = load_predictions(PREDICTION_FILE.stat().st_mtime)
-    window = pick_window(predictions)
+    date_box, time_box, road_box = st.columns(3)
+    window = pick_window(predictions, date_box, time_box)
     rows = predictions[predictions["forecast_for"] == window]
+    road = pick_road(rows, road_box)
     st.write(f"forecast_for {window:%A %d %B %Y , %H : %M}")
     corridor_summary(rows)
     segment_table(rows)
-    road_detail(pick_road(rows))
+    road_detail(road)
 
     
 def main() -> None:
