@@ -1,0 +1,2 @@
+road_id,road_name,latitude,longitude,weather_station_id,date,time,traffic_volume,vehicle_count,vehicle_type_dist,avg_speed,occupancy,congestion_level,travel_time,accident_count,signal_timing,road_capacity
+NL-007,Kingsway @ Park,28.647903,77.149142,WS-NORTH,2025-02-26,07:30,706,706,"{""2W"": 0.37, ""Car"": 0.43, ""LCV"": 0.11, ""HCV"": 0.09}",31.2,59.6,Moderate,2.12,0,54,1928

@@ -408,10 +408,8 @@ def write_data_quality_report() -> None:
     REPORT_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    tables = load_and_validate_tables()
-
+def clean_and_merge(tables: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Run every cleaning stage on the three loaded tables and return the merged dataset."""
     for name in tables:
         tables[name] = remove_exact_duplicates(tables[name], name)
 
@@ -441,6 +439,13 @@ def main() -> None:
     merged_data = add_day_of_week(merged_data)
     inspect_merged_dataset(merged_data)
     validate_merged_dataset(merged_data)
+    return merged_data
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    tables = load_and_validate_tables()
+    merged_data = clean_and_merge(tables)
 
     INTERIM_DIRECTORY.mkdir(parents=True, exist_ok=True)
     merged_data.to_csv(INTERIM_DIRECTORY / "merged.csv", index=False)

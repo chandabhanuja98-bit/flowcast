@@ -206,12 +206,21 @@ def create_targets(df: pd.DataFrame) -> pd.DataFrame:
     df["target_accident"] = (next_accidents > 0).astype(float).where(next_accidents.notna())
     return df
 
-def main() -> None:
-    df = pd.read_csv(INTERIM_FILE)
+def load_merged(path=INTERIM_FILE) -> pd.DataFrame:
+    """Read a merged dataset csv and put its timestamps in the project time zone."""
+    df = pd.read_csv(path)
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.tz_convert(TIMEZONE)
+    return df
+
+
+def prepare_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str], int]:
+    """Build the features, drop rows without enough history or target, and check the result.
+
+    Returns the feature table, the original column names and the number of rows dropped.
+    """
     original_columns = df.columns.to_list()
     df = build_features(df)
-    
+
     history_columns = [column for column in df.columns if "_lag_" in column or "_roll_" in column]
     rows_before = len(df)
     df = df.dropna(subset=history_columns+TARGET_COLUMNS).reset_index(drop=True)
@@ -222,9 +231,13 @@ def main() -> None:
     print(f"Rows after: {len(df)}")
     print(f"Columns: {len(df.columns)}")
 
-
     validate_features(df)
-    info = save_processed_dataset(df,original_columns,rows_before-len(df))
+    return df, original_columns, rows_before - len(df)
+
+
+def main() -> None:
+    df, original_columns, rows_dropped = prepare_features(load_merged())
+    info = save_processed_dataset(df, original_columns, rows_dropped)
     update_data_quality_report(info)
 
 
