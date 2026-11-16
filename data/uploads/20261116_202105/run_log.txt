@@ -1,0 +1,300 @@
+traffic_sensor_log.csv : required columns are validated
+Timestamp creation : traffic_sensor_log.csv
+Invalid time stamps : 0
+weather_observations.csv : required columns are validated
+Timestamp creation : weather_observations.csv
+Invalid time stamps : 0
+calendar_events.csv : required columns are validated
+
+Exact duplicate removal: traffic_sensor_log.csv
+Rows before removal: 11819
+Exact duplicate rows removed: 113
+Rows after removal: 11706
+
+Exact duplicate removal: weather_observations.csv
+Rows before removal: 10872
+Exact duplicate rows removed: 0
+Rows after removal: 10872
+
+Exact duplicate removal: calendar_events.csv
+Rows before removal: 151
+Exact duplicate rows removed: 0
+Rows after removal: 151
+
+Missing-value analysis: traffic_sensor_log.csv
+                  missing_count  missing_percentage
+congestion_level           1692               14.45
+traffic_volume              301                2.57
+avg_speed                   300                2.56
+occupancy                   300                2.56
+
+Duplicate-key analysis: traffic_sensor_log.csv
+Rows involved in duplicate keys: 0
+Number of duplicate key groups: 0
+
+Numeric range analysis: traffic_sensor_log.csv
+latitude: below -90 = 0, above 90 = 0
+longitude: below -180 = 0, above 180 = 0
+traffic_volume: below 0 = 20, above None = 0
+vehicle_count: below 0 = 0, above None = 0
+avg_speed: below 0 = 0, above 200 = 8
+occupancy: below 0 = 0, above 100 = 10
+travel_time: below 0 = 0, above None = 0
+accident_count: below 0 = 0, above None = 0
+signal_timing: below 0 = 0, above None = 0
+road_capacity: below 1 = 0, above None = 0
+
+Missing-value analysis: weather_observations.csv
+             missing_count  missing_percentage
+temperature            167                1.54
+visibility             111                1.02
+
+Duplicate-key analysis: weather_observations.csv
+Rows involved in duplicate keys: 0
+Number of duplicate key groups: 0
+
+Numeric range analysis: weather_observations.csv
+temperature: below -60 = 0, above 60 = 0
+rainfall: below 0 = 0, above None = 0
+visibility: below 0 = 0, above None = 0
+
+Missing-value analysis: calendar_events.csv
+              missing_count  missing_percentage
+holiday_name            145               96.03
+event_name              145               96.03
+
+Numeric range analysis: calendar_events.csv
+
+Missing windows : 294 of 12000 expected rows
+
+[Traffic] Duplicate records removal
+Rows before: 11706
+Duplicate records removed: 0
+Rows after: 11706
+
+[weather_observations.csv] Duplicate keys ['station_id', 'timestamp'] removed: 0
+
+[calendar_events.csv] Duplicate keys ['date'] removed: 0
+Weather condition before standardization :
+weather_condition
+Clear       5647
+Cloudy      1504
+clear       1284
+CLEAR       1237
+Overcast     358
+cloudy       340
+Rain         307
+Fog           59
+rain          48
+rainy         37
+RAIN          34
+foggy         10
+FOG            7
+Name: count, dtype: int64
+Weather condition after standardization :
+weather_condition
+clear       8168
+cloudy      1844
+rain         426
+overcast     358
+fog           76
+Name: count, dtype: int64
+
+[traffic_sensor_log.csv] Invalid numeric values set to NaN:
+{'traffic_volume': 20, 'vehicle_count': 0, 'avg_speed': 0, 'occupancy': 0, 'travel_time': 0, 'accident_count': 0, 'road_capacity': 0, 'avg_speed_above_200': 8, 'occupancy_above_100': 10}
+
+[weather_observations.csv] Invalid numeric values set to NaN:
+{'rainfall': 0, 'visibility': 0}
+
+[traffic_sensor_log.csv] Missing windows added
+Rows before: 11706
+Rows added: 294
+Rows after: 12000
+
+[traffic_sensor_log.csv] Statistical outliers capped:
+{'traffic_volume': 0, 'avg_speed': 0}
+
+[traffic_sensor_log.csv] Missing values handled
+Missing before :
+traffic_volume    615
+vehicle_count     294
+avg_speed         602
+occupancy         604
+travel_time       294
+accident_count    294
+signal_timing     294
+dtype: int64
+Missing after :
+traffic_volume    0
+vehicle_count     0
+avg_speed         0
+occupancy         0
+travel_time       0
+accident_count    0
+signal_timing     0
+dtype: int64
+Rows quarantined : 0
+
+[weather_observations.csv] Missing weather values handled
+Missing before :
+temperature    167
+rainfall         0
+visibility     111
+dtype: int64
+Missing after :
+temperature    0
+rainfall       0
+visibility     0
+dtype: int64
+
+[traffic_sensor_log.csv] Congestion level derived
+Missing before: 1986
+Missing after: 0
+Existing labels that disagree with the rule: 48 of 10014
+congestion_level
+Free-flow    7174
+Moderate     2971
+Heavy        1223
+Severe        632
+Name: count, dtype: int64
+
+[traffic_sensor_log.csv] Converted to integer : ['traffic_volume', 'vehicle_count', 'accident_count', 'signal_timing', 'road_capacity']
+
+Dataset merge completed.
+Traffic rows: 12000
+Merged rows: 12000
+Merged columns: 26
+Rows with no weather: 0
+Rows with no calendar date: 0
+===============================inspect merged dataset ==================================================================
+
+==================================================
+Dataset : merged dataset
+==================================================
+Rows : 12000
+Columns : 27
+
+Column names :
+['road_id', 'road_name', 'latitude', 'longitude', 'road_capacity', 'timestamp', 'date', 'time', 'traffic_volume', 'vehicle_count', 'vehicle_type_dist', 'avg_speed', 'occupancy', 'congestion_level', 'travel_time', 'accident_count', 'signal_timing', 'weather_condition', 'temperature', 'rainfall', 'visibility', 'public_holiday', 'holiday_name', 'event_flag', 'event_name', 'roadwork_flag', 'day_of_week']
+
+Data types :
+road_id                                    string
+road_name                                     str
+latitude                                  float64
+longitude                                 float64
+road_capacity                               int64
+timestamp            datetime64[us, Asia/Kolkata]
+date                                       string
+time                                       string
+traffic_volume                              int64
+vehicle_count                               int64
+vehicle_type_dist                             str
+avg_speed                                 float64
+occupancy                                 float64
+congestion_level                              str
+travel_time                               float64
+accident_count                              int64
+signal_timing                               int64
+weather_condition                             str
+temperature                               float64
+rainfall                                  float64
+visibility                                float64
+public_holiday                              int64
+holiday_name                                  str
+event_flag                                  int64
+event_name                                    str
+roadwork_flag                               int64
+day_of_week                                   str
+dtype: object
+
+Missing values per column :
+road_id                  0
+road_name                0
+latitude                 0
+longitude                0
+road_capacity            0
+timestamp                0
+date                     0
+time                     0
+traffic_volume           0
+vehicle_count            0
+vehicle_type_dist      294
+avg_speed                0
+occupancy                0
+congestion_level         0
+travel_time              0
+accident_count           0
+signal_timing            0
+weather_condition        0
+temperature              0
+rainfall                 0
+visibility               0
+public_holiday           0
+holiday_name         12000
+event_flag               0
+event_name           12000
+roadwork_flag            0
+day_of_week              0
+dtype: int64
+
+First 5 rows :
+  road_id            road_name   latitude  longitude  ...  event_flag event_name  roadwork_flag day_of_week
+0  NL-001  Northline Ave @ 5th  28.643422  77.190411  ...           0        NaN              0         Thu
+1  NL-001  Northline Ave @ 5th  28.643422  77.190411  ...           0        NaN              0         Thu
+2  NL-001  Northline Ave @ 5th  28.643422  77.190411  ...           0        NaN              0         Thu
+3  NL-001  Northline Ave @ 5th  28.643422  77.190411  ...           0        NaN              0         Thu
+4  NL-001  Northline Ave @ 5th  28.643422  77.190411  ...           0        NaN              0         Thu
+
+[5 rows x 27 columns]
+
+Numeric range analysis: merged dataset
+latitude: below -90 = 0, above 90 = 0
+longitude: below -180 = 0, above 180 = 0
+traffic_volume: below 0 = 0, above None = 0
+vehicle_count: below 0 = 0, above None = 0
+avg_speed: below 0 = 0, above 200 = 0
+occupancy: below 0 = 0, above 100 = 0
+travel_time: below 0 = 0, above None = 0
+accident_count: below 0 = 0, above None = 0
+signal_timing: below 0 = 0, above None = 0
+road_capacity: below 1 = 0, above None = 0
+temperature: below -60 = 0, above 60 = 0
+rainfall: below 0 = 0, above None = 0
+visibility: below 0 = 0, above None = 0
+
+Merged dataset checks
+Roads: 25
+Time range: 2025-05-01 00:00:00+05:30 to 2025-05-10 23:30:00+05:30
+Duplicate road/timestamp rows: 0
+
+Congestion levels:
+congestion_level
+Free-flow    7174
+Moderate     2971
+Heavy        1223
+Severe        632
+Name: count, dtype: int64
+
+Weather conditions:
+weather_condition
+clear       8902
+cloudy      2262
+overcast     384
+rain         332
+fog          120
+Name: count, dtype: int64
+
+Final validation passed
+Rows before: 12000
+Rows dropped (no history yet): 8425
+Rows after: 3575
+Columns: 83
+Feature validation passed
+target_volume: XGBoost (RMSE 55.208 on validation, chosen from 3 saved models)
+target_travel_time: XGBoost (RMSE 1.020 on validation, chosen from 3 saved models)
+target_congestion: Random Forest (macro_F1 0.764 on validation, chosen from 3 saved models)
+target_accident: Decision Tree (ROC_AUC 0.545 on validation, chosen from 3 saved models)
+volume: interval +/-18.2%, covers 91.7% of test actuals (target 90%)
+travel_time: interval +/-19.0%, covers 90.2% of test actuals (target 90%)
+congestion: 96.6% correct when confidence >= 0.8 (73% of windows), 63.0% otherwise
+accident: calibrated risk averages 0.87% on test, real rate 0.97%

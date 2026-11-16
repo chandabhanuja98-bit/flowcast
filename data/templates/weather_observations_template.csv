@@ -1,0 +1,2 @@
+station_id,date,time,weather_condition,temperature,rainfall,visibility
+WS-NORTH,01/01/2025,00:00,Clear,12.7,0.0,10000.0

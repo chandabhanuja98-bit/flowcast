@@ -1,0 +1,62 @@
+{
+  "run_id": "20261116_202105",
+  "created": "2026-11-16T20:21:14+05:30",
+  "files": {
+    "traffic_sensor_log.csv": "test_traffic_upload.csv",
+    "weather_observations.csv": "original table from data/raw",
+    "calendar_events.csv": "original table from data/raw"
+  },
+  "rows_uploaded": 11819,
+  "rows_predicted": 3575,
+  "roads": 25,
+  "forecast_from": "2025-05-08 00:30:00+05:30",
+  "forecast_to": "2025-05-10 23:30:00+05:30",
+  "dataset_version": "v1",
+  "models": {
+    "target_volume": {
+      "model": "XGBoost",
+      "trained_at": "2026-11-11T15:34:39+00:00",
+      "training_window_to": "2025-04-18 18:00:00+05:30"
+    },
+    "target_travel_time": {
+      "model": "XGBoost",
+      "trained_at": "2026-11-11T15:52:42+00:00",
+      "training_window_to": "2025-04-18 18:00:00+05:30"
+    },
+    "target_congestion": {
+      "model": "Random Forest",
+      "trained_at": "2026-11-12T04:48:25+00:00",
+      "training_window_to": "2025-04-18 18:00:00+05:30"
+    },
+    "target_accident": {
+      "model": "Decision Tree",
+      "trained_at": "2026-11-11T14:56:29+00:00",
+      "training_window_to": "2025-04-18 18:00:00+05:30"
+    }
+  },
+  "cleaning_summary": {
+    "traffic_sensor_log.csv: exact duplicate rows removed": "113",
+    "weather_observations.csv: exact duplicate rows removed": "0",
+    "calendar_events.csv: exact duplicate rows removed": "0",
+    "Traffic: missing windows before cleaning": "294",
+    "Traffic: duplicate road/timestamp rows removed": "0",
+    "weather_observations.csv: duplicate key rows removed": "0",
+    "calendar_events.csv: duplicate key rows removed": "0",
+    "Weather: different condition labels before / after": "13 / 5",
+    "traffic_sensor_log.csv: impossible values set to NaN": "38",
+    "weather_observations.csv: impossible values set to NaN": "0",
+    "traffic_sensor_log.csv: missing windows added": "294",
+    "traffic_sensor_log.csv: statistical outliers capped (3 x IQR)": "0",
+    "traffic_sensor_log.csv: missing sensor values before filling": "2997",
+    "traffic_sensor_log.csv: rows quarantined as unrecoverable": "0",
+    "weather_observations.csv: missing weather values before filling": "278",
+    "traffic_sensor_log.csv: congestion levels derived": "1986",
+    "traffic_sensor_log.csv: existing labels that disagree with the rule": "48",
+    "Merge: rows with no weather match": "0",
+    "Merge: rows with no calendar match": "0",
+    "Final: rows (25 roads x every 30 minute window)": "12000",
+    "Final: columns": "27",
+    "Final: nulls in modelling columns": "0"
+  },
+  "quarantined_rows": {}
+}
